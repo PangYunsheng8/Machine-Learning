@@ -75,6 +75,41 @@ class DecisionTree:
         self.n_feats = X.shape[1] if not self.n_feats else min(X.shape[1], self.n_feats)
         self.root = self._grow(X, Y)
 
+    def predict(self, X):
+        """
+        Use the trained decision tree to classify or predict the examples in `X`.
+
+        Parameters
+        ----------
+        X: `ndarray <numpy.ndarray>` of shape `(N, M)`
+            The training data of `N` examples, each with `M` features
+
+        Returns
+        -------
+        preds: `ndarray <numpy.ndarray>` of shape `(N,)`
+            The integer class labels predicted for each example in `X` if
+            self.classifier = True, otherwise the predicted target values.
+        """
+        return np.array([self._traverse(x, self.root) for x in X])
+
+    def predict_class_probs(self, X):
+        """
+        Use the trained decision tree to return the class probabilities for the
+        examples in `X`.
+
+        Parameters
+        ----------
+        X: `ndarray <numpy.ndarray>` of shape `(N, M)`
+            The training data of `N` examples, each with `M` features
+
+        Returns
+        -------
+        preds: `ndarray <numpy.ndarray>` of shape `(N, n_classes)`
+            The class probabilities predicted for each example in `X`.
+        """
+        assert self.classifier, "`predict_class_probs` undefined for classifier = False"
+        return np.array([self._traverse(X, self.root, prob=True) for x in X])
+
     def _grow(self, X, Y):
         # if all labels are the same, return a leaf
         if len(set(Y)) == 1:
@@ -97,7 +132,6 @@ class DecisionTree:
 
         # greedily select the best split according to `criterion`
         feat, thresh = self._segment(X, Y, feat_idxs)
-        print(feat, thresh)
         l = np.argwhere(X[:, feat] <= thresh).flatten()
         r = np.argwhere(X[:, feat] > thresh).flatten()
 
@@ -116,9 +150,7 @@ class DecisionTree:
         for i in feat_idxs:
             vals = X[:, i]
             levels = np.unique(vals)
-            print(len(levels))
             thresholds = (levels[:-1] + levels[1:]) / 2 if len(levels) > 1 else levels
-            print(len(thresholds))
             gains = np.array([self._impurity_gain(Y, t, vals) for t in thresholds])
 
             if gains.max() > best_gain:
@@ -158,6 +190,15 @@ class DecisionTree:
         # impurity gain is difference in loss before vs. after split
         ig = parent_loss - child_loss
         return ig
+
+    def _traverse(self, X, node, prob=False):
+        if isinstance(node, Leaf):
+            if self.classifier:
+                return node.value if prob else node.value.argmax()
+            return node.value
+        if X[node.feature] <= node.threshold:
+            return self._traverse(X, node.left, prob)
+        return self._traverse(X, node.right, prob)
 
 
 def mse(y):

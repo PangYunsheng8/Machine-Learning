@@ -49,7 +49,17 @@ def test_DecisionTree(classifier=True, criterion="entropy"):
     print(X.shape)
     print(Y.shape)
     mine.fit(X, Y)
-    # gold.fit(X, Y)
+    gold.fit(X, Y)
+
+    print(X_test.shape)
+    print(Y_test)
+    predict = mine.predict(X_test)
+    print(predict)
+    print(mine.root.left.value)
+    print(mine.root.right.value)
+
+    predict_gold = gold.predict(X_test)
+    print(predict_gold)
 
 
 test_DecisionTree(classifier=True, criterion="gini")
