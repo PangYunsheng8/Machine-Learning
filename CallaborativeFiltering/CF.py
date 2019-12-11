@@ -23,11 +23,13 @@ def cosSim(x, y):
 
 
 class CallaborativeFiltering:
-    def __init__(self, data, is_matrix, sim_meas, users, rank=3):
+    def __init__(self, data, is_matrix, sim_meas, users, rank=3, use_svd=False, n_sv=100):
         self.data = data
         self.sim_meas = sim_meas
         self.users = users
         self.rank = rank
+        self.use_svd = use_svd
+        self.n_sv = n_sv
         self.is_matrix = is_matrix
 
         if isinstance(self.data, np.ndarray): pass
@@ -36,6 +38,9 @@ class CallaborativeFiltering:
 
         if self.sim_meas not in [euclidSim, pearsSim, cosSim]:
             raise ValueError('相似度计算函数错误！')
+
+        if self.use_svd and not self.is_matrix:
+            raise ValueError('数据必须为矩阵才能使用SVD分解！')
 
         if self.is_matrix:
             self.num_users = int(self.data.shape[0])
@@ -59,7 +64,7 @@ class CallaborativeFiltering:
                 data_dic[userId][1].append(rating)
         return data_dic
 
-    def _stand_est(self, user, un_rated_item):
+    def _est(self, user, un_rated_item):
         """
         标准估计分数函数
 
@@ -76,6 +81,12 @@ class CallaborativeFiltering:
             rated_items = self.data[user][0]
             rating = self.data[user][1]
 
+        if self.use_svd:
+            U, sigma, VT = la.svd(self.data)
+            Sig_n_sv = np.matrix(np.eye(n_sv) * Sigma[:n_sv])
+            # 将原始矩阵映射为SVD降维后的新空间。item的个数=新矩阵的行数
+            transformedItems = (dataMat.T * U[:, :n_sv] * Sig_n_sv.I).T
+
         sim_total = 0.
         rat_sim_total = 0.
         # 计算item与每个物品的相似度
@@ -83,10 +94,14 @@ class CallaborativeFiltering:
             if self.is_matrix:
                 user_rating = self.data[user - 1, i]
                 if user_rating == 0: continue
+                if self.use_svd:
+                    item_vec = transformedItems[:, un_rated_item - 1]
+                    i_vec = transformedItems[:, i]
                 # 获取同时给i商品和item商品评分的uesr索引值
-                both = np.nonzero(np.logical_and(self.data[:, un_rated_item - 1] > 0, self.data[:, i] > 0))
-                item_vec = self.data[both, un_rated_item - 1][0]
-                i_vec = self.data[both, i][0]
+                else:
+                    both = np.nonzero(np.logical_and(self.data[:, un_rated_item - 1] > 0, self.data[:, i] > 0))[0]
+                    item_vec = self.data[both, un_rated_item - 1]
+                    i_vec = self.data[both, i]
             else:
                 item_id = i + 1
                 if item_id not in rated_items: continue
@@ -118,7 +133,7 @@ class CallaborativeFiltering:
 
         item_scores = []
         for item in tqdm(un_rated_items):
-            estimated_score = self._stand_est(user, item)
+            estimated_score = self._est(user, item)
             item_scores.append((item, estimated_score))
         recomm = sorted(item_scores, reverse = True)[:self.rank]
         return recomm
